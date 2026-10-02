@@ -1,0 +1,43 @@
+:root {
+  --primary: #1A365D;
+  --primary-hover: #132A4A;
+  --primary-light: #EBF8FF;
+  --primary-dark: #0F233D;
+  --accent: #D69E2E;
+  --surface: #FFFFFF;
+  --background: #F7FAFC;
+  --text: #2D3748;
+  --muted: #718096;
+  --border: #E2E8F0;
+  --success: #38A169;
+  --success-bg: #F0FFF4;
+  --warning: #DD6B20;
+  --warning-bg: #FFFAF0;
+  --danger: #E53E3E;
+  --danger-bg: #FFF5F5;
+  --info: #3182CE;
+  --info-bg: #EBF8FF;
+
+  --radius-sm: 4px;
+  --radius: 6px;
+  --radius-lg: 8px;
+  --radius-full: 9999px;
+
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  --font-size-xs: 12px;
+  --font-size-sm: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+}
