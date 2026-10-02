@@ -65,14 +65,7 @@ const createReportSchema = z
       .max(80, { message: 'Reporter name must be at most 80 characters' }),
     reportedAt: z
       .string()
-      .datetime({ message: 'Must be a valid ISO timestamp' })
-      .refine(
-        (val) => {
-          const fiveMinInFuture = Date.now() + 5 * 60 * 1000;
-          return new Date(val).getTime() <= fiveMinInFuture;
-        },
-        { message: 'Reported time cannot be more than 5 minutes in the future' }
-      ),
+      .datetime({ message: 'Must be a valid ISO timestamp' }),
     history: z.array(clientHistoryEventSchema).optional().default([]),
   })
   .refine(
