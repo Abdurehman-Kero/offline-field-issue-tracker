@@ -93,26 +93,35 @@ export function ReportForm({ isOpen, editClientId, onSaved, onCancel }: ReportFo
     // When the user picked 'Other', use the typed value as the actual category sent to the server.
     const resolvedCategory = category === 'Other' ? otherCategory.trim() : category;
 
-    const validationResult = reportFormSchema.safeParse({
-      title,
-      category: resolvedCategory,
-      priority,
-      description,
-      reporterName,
-      latitude: latNum,
-      longitude: lngNum,
-    });
+    // Drafts only need a title (location); full validation is only required on submit.
+    if (submitNow) {
+      const validationResult = reportFormSchema.safeParse({
+        title,
+        category: resolvedCategory,
+        priority,
+        description,
+        reporterName,
+        latitude: latNum,
+        longitude: lngNum,
+      });
 
-    if (!validationResult.success) {
-      const fieldErrors: Record<string, string> = {};
-      for (const issue of validationResult.error.issues) {
-        const fieldName = issue.path[0] as string;
-        if (!fieldErrors[fieldName]) {
-          fieldErrors[fieldName] = issue.message;
+      if (!validationResult.success) {
+        const fieldErrors: Record<string, string> = {};
+        for (const issue of validationResult.error.issues) {
+          const fieldName = issue.path[0] as string;
+          if (!fieldErrors[fieldName]) {
+            fieldErrors[fieldName] = issue.message;
+          }
         }
+        setErrors(fieldErrors);
+        return;
       }
-      setErrors(fieldErrors);
-      return;
+    } else {
+      // Draft: only require a title
+      if (!title.trim() || title.trim().length < 3) {
+        setErrors({ title: 'Please enter a location or title (at least 3 characters) to save a draft' });
+        return;
+      }
     }
 
     setErrors({});
@@ -192,197 +201,191 @@ export function ReportForm({ isOpen, editClientId, onSaved, onCancel }: ReportFo
 
   return (
     <div className="modal-overlay" onClick={onCancel}>
-      <div className="modal-container" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <div>
-            <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text)', margin: 0 }}>
-              {editClientId ? 'Edit Draft Report' : 'New Infrastructure Report'}
+      <div className="modal-container" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '600px' }}>
+        <div className="modal-header" style={{ borderBottom: '1px solid var(--border)', paddingBottom: '12px', alignItems: 'flex-start' }}>
+          <div style={{ flex: 1, paddingRight: '16px' }}>
+            <h3 style={{ fontSize: '16px', fontWeight: 700, color: 'var(--text)', margin: '0 0 4px 0', lineHeight: 1.2 }}>
+              {editClientId ? '✏️ Edit Draft' : '📋 New Infrastructure Report'}
             </h3>
-            <p style={{ fontSize: '12px', color: 'var(--muted)', margin: '2px 0 0 0' }}>
-              Record field conditions with offline validation and GPS capture.
+            <p style={{ fontSize: '12px', color: 'var(--muted)', margin: 0, lineHeight: 1.4 }}>
+              {editClientId
+                ? 'Update the draft fields below. All fields are required before submitting.'
+                : 'Fill in the location and details. Save as draft to complete later, or submit now.'}
             </p>
           </div>
           <button
             type="button"
             onClick={onCancel}
-            style={{
-              background: 'none',
-              border: 'none',
-              color: 'var(--muted)',
-              cursor: 'pointer',
-              padding: '4px',
-              display: 'flex',
-            }}
+            style={{ background: 'none', border: 'none', color: 'var(--muted)', cursor: 'pointer', padding: '4px', display: 'flex', borderRadius: '6px' }}
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
         <div className="modal-body">
           {errors.form && (
-            <div
-              style={{
-                backgroundColor: 'var(--danger-bg)',
-                color: 'var(--danger)',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                fontSize: '12px',
-                marginBottom: '12px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
-            >
+            <div style={{ backgroundColor: 'var(--danger-bg)', color: 'var(--danger)', padding: '10px 14px', borderRadius: '8px', fontSize: '13px', marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '8px', border: '1px solid #FECACA' }}>
               <AlertCircle size={15} />
               <span>{errors.form}</span>
             </div>
           )}
 
-          <div className="form-group">
-            <label>Location / Facility Title *</label>
-            <input
-              type="text"
-              placeholder="e.g. Reservoir Tank Hill 7 or Sector 4 Water Point"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-            {errors.title && <span className="field-error">{errors.title}</span>}
-          </div>
+          {/* Section: General Info */}
+          <div style={{ marginBottom: '18px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '10px', paddingBottom: '6px', borderBottom: '1px solid #F1F3F4' }}>
+              📍 Location &amp; Classification
+            </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
             <div className="form-group">
-              <label>Category *</label>
-              {category === 'Other' ? (
-                <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                  <input
-                    type="text"
-                    style={{ flex: 1 }}
-                    placeholder="Describe the category (e.g. Road Damage)"
-                    value={otherCategory}
-                    onChange={(e) => setOtherCategory(e.target.value)}
-                    autoFocus
-                  />
-                  {/* Go back to the dropdown */}
-                  <button
-                    type="button"
-                    onClick={() => { setCategory(CATEGORIES[0]); setOtherCategory(''); }}
-                    title="Choose a category from the list"
-                    style={{
-                      background: 'none',
-                      border: '1px solid var(--border)',
-                      borderRadius: 'var(--radius)',
-                      padding: '0 10px',
-                      height: '40px',
-                      cursor: 'pointer',
-                      color: 'var(--muted)',
-                      fontSize: '14px',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    ← List
-                  </button>
-                </div>
-              ) : (
-                <select value={category} onChange={(e) => { setCategory(e.target.value as Category); setOtherCategory(''); }}>
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
+              <label>Location / Facility Title *</label>
+              <input
+                type="text"
+                placeholder="e.g. Reservoir Tank Hill 7 or Sector 4 Water Point"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+              {errors.title && <span className="field-error">{errors.title}</span>}
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '12px' }}>
+              <div className="form-group">
+                <label>Category *</label>
+                {category === 'Other' ? (
+                  <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      style={{ flex: 1 }}
+                      placeholder="Describe category (e.g. Road Damage)"
+                      value={otherCategory}
+                      onChange={(e) => setOtherCategory(e.target.value)}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => { setCategory(CATEGORIES[0]); setOtherCategory(''); }}
+                      title="Choose from the list"
+                      style={{ background: 'none', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: '0 10px', height: '40px', cursor: 'pointer', color: 'var(--muted)', fontSize: '13px', whiteSpace: 'nowrap' }}
+                    >
+                      ← List
+                    </button>
+                  </div>
+                ) : (
+                  <select value={category} onChange={(e) => { setCategory(e.target.value as Category); setOtherCategory(''); }}>
+                    {CATEGORIES.map((c) => (<option key={c} value={c}>{c}</option>))}
+                  </select>
+                )}
+                {errors.category && <span className="field-error">{errors.category}</span>}
+              </div>
+
+              <div className="form-group">
+                <label>Priority Level *</label>
+                <select value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>
+                  {PRIORITIES.map((p) => (<option key={p} value={p}>{p}</option>))}
                 </select>
-              )}
-              {errors.category && <span className="field-error">{errors.category}</span>}
-            </div>
+                {errors.priority && <span className="field-error">{errors.priority}</span>}
+              </div>
 
-            <div className="form-group">
-              <label>Priority Level *</label>
-              <select value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>
-                {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    {p}
-                  </option>
-                ))}
-              </select>
-              {errors.priority && <span className="field-error">{errors.priority}</span>}
-            </div>
-
-            <div className="form-group">
-              <label>Reporter Name</label>
-              <input
-                type="text"
-                value={reporterName}
-                onChange={(e) => setReporterName(e.target.value)}
-                placeholder="Enter your name"
-              />
-              {errors.reporterName && <span className="field-error">{errors.reporterName}</span>}
+              <div className="form-group">
+                <label>Reporter Name *</label>
+                <input
+                  type="text"
+                  value={reporterName}
+                  onChange={(e) => setReporterName(e.target.value)}
+                  placeholder="Your full name"
+                />
+                {errors.reporterName && <span className="field-error">{errors.reporterName}</span>}
+              </div>
             </div>
           </div>
 
-          <div className="form-group">
-            <label>Detailed Description *</label>
-            <textarea
-              rows={4}
-              placeholder="Describe symptoms, safety impact, and immediate field actions required..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-            {errors.description && <span className="field-error">{errors.description}</span>}
+          {/* Section: Description */}
+          <div style={{ marginBottom: '18px' }}>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '10px', paddingBottom: '6px', borderBottom: '1px solid #F1F3F4' }}>
+              📝 Description
+            </div>
+            <div className="form-group">
+              <label style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Detailed Description *</span>
+                <span style={{ fontWeight: 400, color: 'var(--muted)', fontSize: '10px' }}>{description.length}/1000 chars</span>
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Symptoms, safety impact, and immediate field actions…"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                style={{ resize: 'vertical' }}
+              />
+              {errors.description && <span className="field-error">{errors.description}</span>}
+            </div>
           </div>
 
-          <div className="form-group">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-              <label style={{ margin: 0 }}>Coordinates (Optional)</label>
-              <button
-                type="button"
-                onClick={handleGetCoordinates}
-                disabled={gpsLoading}
-                className="btn-secondary btn-sm"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
-              >
-                <MapPin size={12} />
-                <span>{gpsLoading ? 'Capturing GPS...' : 'Use My Location'}</span>
-              </button>
+          {/* Section: GPS */}
+          <div>
+            <div style={{ fontSize: '11px', fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: '10px', paddingBottom: '6px', borderBottom: '1px solid #F1F3F4' }}>
+              📡 GPS Coordinates
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-              <input
-                type="text"
-                placeholder="Latitude (e.g. 9.072)"
-                value={latitude}
-                onChange={(e) => setLatitude(e.target.value)}
-              />
-              <input
-                type="text"
-                placeholder="Longitude (e.g. 38.789)"
-                value={longitude}
-                onChange={(e) => setLongitude(e.target.value)}
-              />
+            <div className="form-group">
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px', gap: '6px' }}>
+                <label style={{ margin: 0, flex: '1 1 auto' }}>Coordinates <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional but recommended)</span></label>
+                <button
+                  type="button"
+                  onClick={handleGetCoordinates}
+                  disabled={gpsLoading}
+                  className="btn-secondary btn-sm"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}
+                >
+                  <MapPin size={12} />
+                  <span>{gpsLoading ? 'Capturing GPS...' : 'Use My Location'}</span>
+                </button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>
+                <input type="text" placeholder="Latitude (e.g. 9.072)" value={latitude} onChange={(e) => setLatitude(e.target.value)} style={{ width: '100%' }} />
+                <input type="text" placeholder="Longitude (e.g. 38.789)" value={longitude} onChange={(e) => setLongitude(e.target.value)} style={{ width: '100%' }} />
+              </div>
+              {errors.gps && <span className="field-error">{errors.gps}</span>}
             </div>
-            {errors.gps && <span className="field-error">{errors.gps}</span>}
-            {errors.latitude && <span className="field-error">{errors.latitude}</span>}
-            {errors.longitude && <span className="field-error">{errors.longitude}</span>}
           </div>
         </div>
 
-        <div className="modal-footer">
-          <button type="button" className="btn-secondary btn-full-mobile" onClick={onCancel} disabled={submitting}>
-            Cancel
-          </button>
-          <button
-            type="button"
-            className="btn-secondary btn-full-mobile"
-            onClick={() => handleSave(false)}
-            disabled={submitting}
-          >
-            Save Draft
-          </button>
-          <button
-            type="button"
-            className="btn-primary btn-full-mobile"
-            onClick={() => handleSave(true)}
-            disabled={submitting}
-          >
-            Submit Report
-          </button>
+        <div
+          className="modal-footer"
+          style={{
+            borderTop: '1px solid var(--border)',
+            paddingTop: '12px',
+          }}
+        >
+          {/* Mobile Footer Grid */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%' }}>
+            <button
+              type="button"
+              className="btn-secondary"
+              style={{ fontWeight: 500, minHeight: '36px', width: '100%' }}
+              onClick={onCancel}
+              disabled={submitting}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={() => handleSave(false)}
+              disabled={submitting}
+              style={{ fontWeight: 600, minHeight: '36px', width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '4px', fontSize: '13px' }}
+            >
+              <span>💾</span>
+              <span>Draft</span>
+            </button>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => handleSave(true)}
+              disabled={submitting}
+              style={{ fontWeight: 700, minHeight: '36px', width: '100%', gridColumn: 'span 2', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+            >
+              <span>🚀</span>
+              <span>{submitting ? 'Submitting…' : 'Submit Report'}</span>
+            </button>
+          </div>
         </div>
       </div>
     </div>

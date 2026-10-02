@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { ClipboardList, Plus, HelpCircle, ArrowLeftRight } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useRole } from '../hooks/useRole';
-import { getAllLocalReports } from '../db/localDb';
+import { getAllLocalReports, getQueueItems } from '../db/localDb';
 import { HelpModal } from './HelpModal';
 
 interface HeaderProps {
@@ -17,13 +17,13 @@ export function Header({ currentTab, onSelectTab, onOpenNewReport }: HeaderProps
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [helpOpen, setHelpOpen] = useState(false);
 
+  const [scrolled, setScrolled] = useState(false);
+
   const updateCounts = async () => {
     try {
-      const reports = await getAllLocalReports();
-      const count = reports.filter(
-        (r) => r.syncState === 'pending' || r.syncState === 'failed'
-      ).length;
-      setPendingCount(count);
+      const [items, reports] = await Promise.all([getQueueItems(), getAllLocalReports()]);
+      const draftCount = reports.filter((r) => r.status === 'Draft' || r.syncState === 'local_only').length;
+      setPendingCount(items.length + draftCount);
     } catch {
       // ignore
     }
@@ -33,7 +33,14 @@ export function Header({ currentTab, onSelectTab, onOpenNewReport }: HeaderProps
     updateCounts();
     const handleUpdate = () => updateCounts();
     window.addEventListener('sync_updated', handleUpdate);
-    return () => window.removeEventListener('sync_updated', handleUpdate);
+
+    const handleScroll = () => setScrolled(window.scrollY > 20);
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    return () => {
+      window.removeEventListener('sync_updated', handleUpdate);
+      window.removeEventListener('scroll', handleScroll);
+    };
   }, []);
 
   const isCoordinator = role === 'coordinator';
@@ -51,7 +58,8 @@ export function Header({ currentTab, onSelectTab, onOpenNewReport }: HeaderProps
           position: 'sticky',
           top: 0,
           zIndex: 50,
-          boxShadow: '0 1px 2px rgba(0, 0, 0, 0.04)',
+          boxShadow: scrolled ? '0 2px 8px rgba(0,0,0,0.08)' : '0 1px 2px rgba(0,0,0,0.04)',
+          transition: 'box-shadow 200ms ease',
         }}
       >
         <div className="container" style={{ padding: '8px 16px' }}>
@@ -225,87 +233,153 @@ export function Header({ currentTab, onSelectTab, onOpenNewReport }: HeaderProps
           {/* ================================================================= */}
           <div className="header-mobile-view">
             {/* Row 1: Brand & Controls */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '8px',
+                padding: scrolled ? '4px 0' : '6px 0',
+                transition: 'padding 200ms ease',
+              }}
+            >
               <div
-                style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', overflow: 'hidden' }}
                 onClick={() => onSelectTab('list')}
               >
                 <div
                   style={{
-                    width: '26px',
-                    height: '26px',
+                    width: scrolled ? '24px' : '28px',
+                    height: scrolled ? '24px' : '28px',
                     borderRadius: '6px',
                     backgroundColor: 'var(--primary)',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: '#ffffff',
+                    flexShrink: 0,
+                    transition: 'width 200ms ease, height 200ms ease',
                   }}
                 >
-                  <ClipboardList size={15} />
+                  <ClipboardList size={scrolled ? 13 : 15} />
                 </div>
-                <span style={{ fontSize: '14px', fontWeight: 700, color: 'var(--text)' }}>Field Tracker</span>
+                <span
+                  style={{
+                    fontSize: scrolled ? '13px' : '14px',
+                    fontWeight: 700,
+                    color: 'var(--text)',
+                    whiteSpace: 'nowrap',
+                    transition: 'font-size 200ms ease',
+                  }}
+                >
+                  Field Tracker
+                </span>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+              {/* Three perfectly equal-size control buttons */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+
+                {/* 1. Online status indicator */}
                 <span
-                  className={isOnline ? 'status-pill status-pill-online' : 'status-pill status-pill-offline'}
-                  style={{ padding: '2px 8px', fontSize: '10px' }}
+                  title={isOnline ? 'Online' : 'Offline'}
                   aria-live="polite"
+                  style={{
+                    width: '32px',
+                    height: '32px',
+                    minHeight: '32px',
+                    borderRadius: '7px',
+                    border: `1.5px solid ${isOnline ? '#A7F3D0' : '#FECACA'}`,
+                    backgroundColor: isOnline ? '#F0FDF4' : '#FEF2F2',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    boxSizing: 'border-box',
+                  }}
                 >
-                  <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: 'currentColor' }} />
-                  <span>{isOnline ? 'Online' : 'Offline'}</span>
+                  <span
+                    style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: isOnline ? '#16A34A' : '#DC2626',
+                      display: 'block',
+                      flexShrink: 0,
+                    }}
+                  />
                 </span>
 
-                {/* Mobile role toggle */}
+                {/* 2. Role toggle */}
                 <button
                   type="button"
                   onClick={() => switchRole(nextRole)}
-                  title={`Switch to ${nextRoleLabel}`}
+                  title={`Currently: ${isCoordinator ? 'Coordinator' : 'Field Worker'}. Tap to switch to ${nextRoleLabel}.`}
                   style={{
+                    width: '32px',
+                    height: '32px',
+                    minHeight: '32px',
+                    borderRadius: '7px',
+                    border: `1.5px solid ${isCoordinator ? '#BFDBFE' : '#d1d5db'}`,
+                    backgroundColor: isCoordinator ? '#EFF6FF' : '#f9fafb',
+                    cursor: 'pointer',
                     display: 'inline-flex',
                     alignItems: 'center',
-                    gap: '3px',
-                    padding: '2px 7px',
-                    border: '1.5px solid #d1d5db',
-                    borderRadius: '5px',
-                    backgroundColor: '#f9fafb',
-                    cursor: 'pointer',
-                    fontSize: '10px',
-                    color: '#374151',
-                    fontWeight: 500,
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    padding: 0,
+                    color: isCoordinator ? 'var(--primary)' : '#6B7280',
+                    boxSizing: 'border-box',
+                    transition: 'border-color 120ms, background 120ms',
                   }}
                 >
-                  <ArrowLeftRight size={9} />
-                  <span>{isCoordinator ? 'Coord' : 'Worker'}</span>
+                  <ArrowLeftRight size={14} />
                 </button>
 
-                {/* Mobile help button */}
+                {/* 3. Help */}
                 <button
                   type="button"
                   onClick={() => setHelpOpen(true)}
+                  title="Help — how to use this app"
                   style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    padding: '2px 6px',
+                    width: '32px',
+                    height: '32px',
+                    minHeight: '32px',
+                    borderRadius: '7px',
                     border: '1.5px solid #d1d5db',
-                    borderRadius: '5px',
                     backgroundColor: '#f9fafb',
                     cursor: 'pointer',
-                    color: '#6b7280',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    padding: 0,
+                    color: '#6B7280',
+                    boxSizing: 'border-box',
+                    transition: 'border-color 120ms, background 120ms',
                   }}
                 >
-                  <HelpCircle size={13} />
+                  <HelpCircle size={14} />
                 </button>
               </div>
             </div>
 
-            {/* Row 2: Nav tabs */}
-            <nav className="segmented-nav" style={{ width: '100%', display: 'flex' }} aria-label="Mobile Navigation">
+            {/* Row 2: Nav tabs — compact when scrolled */}
+            <nav
+              className="segmented-nav"
+              style={{
+                width: '100%',
+                display: 'flex',
+                height: scrolled ? '32px' : '36px',
+                minHeight: scrolled ? '32px' : '36px',
+                transition: 'height 200ms ease, min-height 200ms ease',
+                overflow: 'hidden',
+              }}
+              aria-label="Mobile Navigation"
+            >
               <button
                 type="button"
                 onClick={() => onSelectTab('list')}
-                style={{ flex: 1, justifyContent: 'center' }}
+                style={{ flex: 1, justifyContent: 'center', fontSize: scrolled ? '11px' : '12px', transition: 'font-size 200ms' }}
                 className={`segmented-nav-btn ${currentTab === 'list' ? 'segmented-nav-btn-active' : ''}`}
               >
                 Reports
@@ -315,10 +389,10 @@ export function Header({ currentTab, onSelectTab, onOpenNewReport }: HeaderProps
                 <button
                   type="button"
                   onClick={onOpenNewReport}
-                  style={{ flex: 1, justifyContent: 'center', color: 'var(--primary)' }}
+                  style={{ flex: 1, justifyContent: 'center', color: 'var(--primary)', fontSize: scrolled ? '11px' : '12px', transition: 'font-size 200ms' }}
                   className="segmented-nav-btn"
                 >
-                  <Plus size={13} />
+                  <Plus size={scrolled ? 11 : 13} />
                   <span>New</span>
                 </button>
               )}
@@ -326,7 +400,7 @@ export function Header({ currentTab, onSelectTab, onOpenNewReport }: HeaderProps
               <button
                 type="button"
                 onClick={() => onSelectTab('sync')}
-                style={{ flex: 1, justifyContent: 'center' }}
+                style={{ flex: 1, justifyContent: 'center', fontSize: scrolled ? '11px' : '12px', transition: 'font-size 200ms' }}
                 className={`segmented-nav-btn ${currentTab === 'sync' ? 'segmented-nav-btn-active' : ''}`}
               >
                 <span>Outbox</span>

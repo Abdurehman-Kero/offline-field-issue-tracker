@@ -130,7 +130,12 @@ export default function App() {
             />
           )}
 
-          {tab === 'sync' && <SyncPage onSelectReport={handleSelectReport} />}
+          {tab === 'sync' && (
+            <SyncPage
+              onSelectReport={handleSelectReport}
+              onEditReport={handleOpenEditReport}
+            />
+          )}
         </div>
       </main>
 

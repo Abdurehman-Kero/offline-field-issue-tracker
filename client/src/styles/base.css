@@ -159,6 +159,16 @@ button:disabled {
   font-size: 16px;  /* Prevents iOS zoom on focus */
 }
 
+.form-group select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%236B7280' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 16px;
+  padding-right: 36px;
+}
+
 @media (min-width: 640px) {
   .form-group input,
   .form-group select,
@@ -232,35 +242,31 @@ button:disabled {
   }
 }
 
+/* ─── Modal ─────────────────────────────────────────────────────────────────── */
+
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(15, 23, 42, 0.65);
-  backdrop-filter: blur(4px);
+  background-color: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(3px);
   z-index: 9999;
   display: flex;
-  align-items: center;  /* Center on all screens */
+  align-items: center; /* Centered vertically on all screens */
   justify-content: center;
-  padding: 12px; /* Keep padding on mobile so it doesn't touch screen edges */
+  padding: 16px; /* Margin on left, right, top, bottom */
   animation: modalFadeIn 160ms ease-out;
   overflow-y: auto;
-}
-
-@media (min-width: 600px) {
-  .modal-overlay {
-    padding: var(--space-4);
-  }
 }
 
 .modal-container {
   position: relative;
   background-color: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  border-radius: 12px; /* Fully rounded on all corners */
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
   width: 100%;
   max-width: 620px;
-  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 32px); /* Never touches top/bottom edges */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -268,24 +274,17 @@ button:disabled {
   animation: modalSlideIn 200ms cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-@media (min-width: 600px) {
-  .modal-container {
-    max-height: calc(100vh - 48px);
-  }
-}
-
 .modal-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
+  padding: 12px 16px 12px;
   background-color: var(--surface);
   flex-shrink: 0;
 }
 
 .modal-body {
-  padding: 16px;
+  padding: 14px 16px;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   flex: 1;
@@ -303,33 +302,31 @@ button:disabled {
   flex-shrink: 0;
 }
 
+/* Desktop sizing tweaks */
+@media (min-width: 600px) {
+  .modal-overlay {
+    padding: var(--space-4);
+  }
+
+  .modal-container {
+    max-width: 640px;
+    max-height: calc(100dvh - 48px);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.35);
+  }
+}
+
 @keyframes modalFadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 @keyframes modalSlideIn {
-  from {
-    opacity: 0;
-    transform: scale(0.97) translateY(8px);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1) translateY(0);
-  }
+  from { opacity: 0; transform: scale(0.97) translateY(8px); }
+  to   { opacity: 1; transform: none; }
 }
 
 @keyframes modalSlideUp {
-  from {
-    opacity: 0;
-    transform: translateY(100%);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  from { opacity: 0; transform: translateY(100%); }
+  to   { opacity: 1; transform: none; }
 }
+
