@@ -57,7 +57,13 @@ export async function apiRequest<T = any>(
   }
 
   try {
-    const response = await fetch(endpoint, {
+    const baseUrl = import.meta.env.VITE_API_URL || '';
+    // Ensure we don't duplicate slashes if baseUrl has a trailing slash
+    const fullUrl = baseUrl 
+      ? `${baseUrl.replace(/\/$/, '')}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
+      : endpoint;
+
+    const response = await fetch(fullUrl, {
       ...options,
       headers,
       signal: controller.signal,
