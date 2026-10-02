@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { ReportItem } from '../shared/types';
 import { Badge } from './Badge';
-import { MapPin, Clock, AlertTriangle, Pencil, Trash2 } from 'lucide-react';
+import { MapPin, Clock, AlertTriangle, Pencil, Trash2, X } from 'lucide-react';
 
 interface ReportCardProps {
   report: ReportItem;
@@ -11,14 +11,11 @@ interface ReportCardProps {
 }
 
 function formatDate(report: ReportItem): string {
-  const rawDate = report.reportedAt || report.createdAt || report.updatedAt || report.receivedAt;
+  const rawDate = report.reportedAt || report.createdAt || report.updatedAt || (report as any).receivedAt;
   if (!rawDate) return 'Recently';
-
   try {
     const d = new Date(rawDate);
     if (isNaN(d.getTime())) return 'Recently';
-
-    // Format like: "Sep 30, 10:00 AM"
     return d.toLocaleString(undefined, {
       month: 'short',
       day: 'numeric',
@@ -31,6 +28,7 @@ function formatDate(report: ReportItem): string {
 }
 
 export function ReportCard({ report, onSelect, onEdit, onDelete }: ReportCardProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const formattedDate = formatDate(report);
   const headline = report.title || report.locationText || `${report.category} Issue`;
   const locationSubtitle = report.locationText && report.title ? report.locationText : null;
@@ -38,15 +36,15 @@ export function ReportCard({ report, onSelect, onEdit, onDelete }: ReportCardPro
 
   return (
     <div
-      onClick={() => onSelect(report.clientId)}
+      onClick={() => !confirmDelete && onSelect(report.clientId)}
       className="card"
       style={{
-        cursor: 'pointer',
+        cursor: confirmDelete ? 'default' : 'pointer',
         padding: '16px',
         marginBottom: '12px',
         backgroundColor: '#FFFFFF',
         borderRadius: '8px',
-        border: '1px solid var(--border)',
+        border: confirmDelete ? '1px solid var(--danger)' : '1px solid var(--border)',
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.04)',
         transition: 'transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease',
         position: 'relative',
@@ -54,11 +52,70 @@ export function ReportCard({ report, onSelect, onEdit, onDelete }: ReportCardPro
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
+        if (!confirmDelete && (e.key === 'Enter' || e.key === ' ')) {
           onSelect(report.clientId);
         }
       }}
     >
+      {/* Delete confirmation overlay */}
+      {confirmDelete && (
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            marginBottom: '12px',
+            padding: '10px 12px',
+            backgroundColor: '#FEF2F2',
+            border: '1px solid #FECACA',
+            borderRadius: '6px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: '10px',
+            flexWrap: 'wrap',
+          }}
+        >
+          <span style={{ fontSize: '13px', color: '#991B1B', fontWeight: 500 }}>
+            Delete this report permanently?
+          </span>
+          <div style={{ display: 'flex', gap: '8px' }}>
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(false)}
+              style={{
+                background: 'transparent',
+                border: '1px solid #D1D5DB',
+                borderRadius: '5px',
+                padding: '3px 10px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                color: 'var(--text)',
+              }}
+            >
+              <X size={11} /> Cancel
+            </button>
+            <button
+              type="button"
+              onClick={() => onDelete && onDelete(report.clientId)}
+              style={{
+                background: 'var(--danger)',
+                border: 'none',
+                borderRadius: '5px',
+                padding: '3px 10px',
+                fontSize: '12px',
+                cursor: 'pointer',
+                color: '#fff',
+                fontWeight: 600,
+              }}
+            >
+              Yes, Delete
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Top Header: Title & Badges */}
       <div
         style={{
@@ -99,7 +156,7 @@ export function ReportCard({ report, onSelect, onEdit, onDelete }: ReportCardPro
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
-          {/* Action icons — only show edit for drafts, delete always */}
+          {/* Action icons */}
           {isDraft && onEdit && (
             <button
               type="button"
@@ -133,12 +190,7 @@ export function ReportCard({ report, onSelect, onEdit, onDelete }: ReportCardPro
           {onDelete && (
             <button
               type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                if (confirm('Delete this report? This action cannot be undone.')) {
-                  onDelete(report.clientId);
-                }
-              }}
+              onClick={(e) => { e.stopPropagation(); setConfirmDelete(true); }}
               title="Delete report"
               style={{
                 background: 'none',
@@ -146,7 +198,7 @@ export function ReportCard({ report, onSelect, onEdit, onDelete }: ReportCardPro
                 borderRadius: '4px',
                 padding: '4px',
                 cursor: 'pointer',
-                color: 'var(--muted)',
+                color: confirmDelete ? 'var(--danger)' : 'var(--muted)',
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -158,8 +210,10 @@ export function ReportCard({ report, onSelect, onEdit, onDelete }: ReportCardPro
                 (e.currentTarget as HTMLElement).style.backgroundColor = 'var(--danger-bg)';
               }}
               onMouseOut={(e) => {
-                (e.currentTarget as HTMLElement).style.color = 'var(--muted)';
-                (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                if (!confirmDelete) {
+                  (e.currentTarget as HTMLElement).style.color = 'var(--muted)';
+                  (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
+                }
               }}
             >
               <Trash2 size={14} />
@@ -201,27 +255,22 @@ export function ReportCard({ report, onSelect, onEdit, onDelete }: ReportCardPro
           paddingTop: '10px',
         }}
       >
-        {/* Category & Priority */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontWeight: 600, color: 'var(--text)' }}>{report.category}</span>
           <span>•</span>
           <Badge type="priority" value={report.priority} />
         </div>
 
-        {/* GPS Coordinates & Timestamp */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '11px' }}>
           {report.latitude != null && report.longitude != null && (
             <span
               style={{ display: 'inline-flex', alignItems: 'center', gap: '3px' }}
-              title={`GPS Coordinates: ${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`}
+              title={`GPS: ${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`}
             >
               <MapPin size={12} color="#3182CE" />
-              <span>
-                {report.latitude.toFixed(3)}, {report.longitude.toFixed(3)}
-              </span>
+              <span>{report.latitude.toFixed(3)}, {report.longitude.toFixed(3)}</span>
             </span>
           )}
-
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
             <Clock size={12} />
             <span>{formattedDate}</span>
@@ -229,7 +278,7 @@ export function ReportCard({ report, onSelect, onEdit, onDelete }: ReportCardPro
         </div>
       </div>
 
-      {/* Assigned To Notice */}
+      {/* Assigned To badge */}
       {report.assignedTo && (
         <div
           style={{
@@ -249,7 +298,7 @@ export function ReportCard({ report, onSelect, onEdit, onDelete }: ReportCardPro
         </div>
       )}
 
-      {/* Sync Error Notice if any */}
+      {/* Sync Error Notice */}
       {report.syncState === 'failed' && report.lastSyncError && (
         <div
           style={{
@@ -265,7 +314,7 @@ export function ReportCard({ report, onSelect, onEdit, onDelete }: ReportCardPro
           }}
         >
           <AlertTriangle size={13} />
-          <span>Sync failed: {report.lastSyncError}</span>
+          <span>Sync failed — {report.lastSyncError}</span>
         </div>
       )}
     </div>

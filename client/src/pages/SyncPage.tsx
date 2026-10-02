@@ -9,9 +9,7 @@ import {
   AlertTriangle,
   Clock,
   ArrowRight,
-  Wifi,
   Trash2,
-  RefreshCw,
 } from 'lucide-react';
 
 interface SyncPageProps {
@@ -23,6 +21,7 @@ export function SyncPage({ onSelectReport }: SyncPageProps) {
   const [queue, setQueue] = useState<MutationQueueItem[]>([]);
   const [reportsMap, setReportsMap] = useState<Map<string, ReportItem>>(new Map());
   const [syncing, setSyncing] = useState<boolean>(false);
+  const [confirmDiscardId, setConfirmDiscardId] = useState<string | null>(null);
   const [syncFeedback, setSyncFeedback] = useState<{
     type: 'success' | 'warning' | 'error';
     message: string;
@@ -32,7 +31,6 @@ export function SyncPage({ onSelectReport }: SyncPageProps) {
     try {
       const items = await getQueueItems();
       setQueue(items);
-
       const reports = await getAllLocalReports();
       setReportsMap(new Map(reports.map((r) => [r.clientId, r])));
     } catch {
@@ -82,12 +80,34 @@ export function SyncPage({ onSelectReport }: SyncPageProps) {
   };
 
   const handleDiscardItem = async (itemId: string) => {
-    if (confirm('Discard this queued change? The local copy will remain as last saved.')) {
-      await dequeueMutation(itemId);
-      await loadQueue();
-      window.dispatchEvent(new CustomEvent('sync_updated'));
-    }
+    await dequeueMutation(itemId);
+    setConfirmDiscardId(null);
+    await loadQueue();
+    window.dispatchEvent(new CustomEvent('sync_updated'));
   };
+
+  const handleDiscardAllFailed = async () => {
+    const failed = queue.filter((q) => q.status === 'failed');
+    for (const item of failed) {
+      await dequeueMutation(item.id);
+    }
+    await loadQueue();
+    window.dispatchEvent(new CustomEvent('sync_updated'));
+  };
+
+  // Humanize error messages so they're not raw "not found" server strings
+  function humanizeError(err: string | null | undefined): string {
+    if (!err) return 'Unknown sync error';
+    if (err.toLowerCase().includes('not found'))
+      return 'This item could not be found on the server. It may have been deleted. You can discard it safely.';
+    if (err.toLowerCase().includes('not yet synced'))
+      return 'This report has not been sent to the server yet. It will sync automatically.';
+    if (err.toLowerCase().includes('network') || err.toLowerCase().includes('fetch'))
+      return 'Network error. Check your connection and try again.';
+    if (err.toLowerCase().includes('version'))
+      return 'Conflict detected — this report was updated elsewhere. Syncing will retry.';
+    return err;
+  }
 
   return (
     <div className="container" style={{ padding: '16px' }}>
@@ -135,7 +155,19 @@ export function SyncPage({ onSelectReport }: SyncPageProps) {
             </p>
           </div>
 
-          <button
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            {queue.some((q) => q.status === 'failed') && (
+              <button
+                type="button"
+                onClick={handleDiscardAllFailed}
+                className="btn-secondary"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}
+              >
+                <Trash2 size={13} />
+                <span>Discard All Failed</span>
+              </button>
+            )}
+            <button
               type="button"
               onClick={handleSyncNow}
               disabled={syncing || !isOnline}
@@ -150,9 +182,10 @@ export function SyncPage({ onSelectReport }: SyncPageProps) {
               <RotateCw size={15} className={syncing ? 'animate-spin' : ''} />
               <span>{syncing ? 'Synchronizing...' : 'Sync Outbox Now'}</span>
             </button>
+          </div>
         </div>
 
-        {/* Feedback message banner if sync just completed */}
+        {/* Feedback message banner */}
         {syncFeedback && (
           <div
             style={{
@@ -225,6 +258,8 @@ export function SyncPage({ onSelectReport }: SyncPageProps) {
               item.payload.title ||
               `${item.payload.category || 'Infrastructure'} Issue`;
 
+            const isConfirmingDiscard = confirmDiscardId === item.id;
+
             return (
               <div
                 key={item.id}
@@ -263,9 +298,9 @@ export function SyncPage({ onSelectReport }: SyncPageProps) {
                       >
                         {item.type === 'CREATE' ? 'New Report' : 'Status Transition'}
                       </span>
-                      {item.type === 'STATUS_CHANGE' && item.payload.toStatus && (
+                      {item.type === 'STATUS_CHANGE' && (item.payload.toStatus || item.payload.status) && (
                         <span style={{ fontSize: '11px', color: 'var(--muted)' }}>
-                          → {item.payload.toStatus}
+                          → {item.payload.toStatus || item.payload.status}
                         </span>
                       )}
                     </div>
@@ -310,6 +345,7 @@ export function SyncPage({ onSelectReport }: SyncPageProps) {
                   </span>
                 </div>
 
+                {/* Human-readable error message */}
                 {item.lastError && (
                   <div
                     style={{
@@ -321,73 +357,121 @@ export function SyncPage({ onSelectReport }: SyncPageProps) {
                       borderRadius: '6px',
                       border: '1px solid #FECACA',
                       display: 'flex',
-                      alignItems: 'center',
+                      alignItems: 'flex-start',
                       gap: '8px',
                     }}
                   >
-                    <AlertTriangle size={14} style={{ flexShrink: 0 }} />
-                    <span>Sync diagnostic: {item.lastError}</span>
+                    <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: '1px' }} />
+                    <span>{humanizeError(item.lastError)}</span>
                   </div>
                 )}
 
-                <div
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    marginTop: '12px',
-                    paddingTop: '10px',
-                    borderTop: '1px solid #F1F3F4',
-                    fontSize: '12px',
-                    color: 'var(--muted)',
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
-                    <Clock size={12} />
-                    <span>Queued {new Date(item.createdAt).toLocaleTimeString()}</span>
+                {/* Inline discard confirmation */}
+                {isConfirmingDiscard ? (
+                  <div
+                    style={{
+                      marginTop: '12px',
+                      paddingTop: '10px',
+                      borderTop: '1px solid #F1F3F4',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '10px',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span style={{ fontSize: '12px', color: 'var(--text)', fontWeight: 500 }}>
+                      Are you sure? This will remove the queued action.
+                    </span>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDiscardId(null)}
+                        className="btn-secondary"
+                        style={{ fontSize: '12px', padding: '4px 12px', minHeight: 'auto' }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDiscardItem(item.id)}
+                        style={{
+                          fontSize: '12px',
+                          padding: '4px 12px',
+                          minHeight: 'auto',
+                          backgroundColor: 'var(--danger)',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: '6px',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                        }}
+                      >
+                        Yes, Discard
+                      </button>
+                    </div>
                   </div>
+                ) : (
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      marginTop: '12px',
+                      paddingTop: '10px',
+                      borderTop: '1px solid #F1F3F4',
+                      fontSize: '12px',
+                      color: 'var(--muted)',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
+                      <Clock size={12} />
+                      <span>Queued {new Date(item.createdAt).toLocaleTimeString()}</span>
+                    </div>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                    <button
-                      type="button"
-                      onClick={() => handleDiscardItem(item.id)}
-                      className="btn-sm"
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--muted)',
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        fontSize: '11px',
-                      }}
-                      title="Discard this queue entry"
-                    >
-                      <Trash2 size={12} />
-                      <span>Discard</span>
-                    </button>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDiscardId(item.id)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--muted)',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontSize: '11px',
+                          padding: '4px 6px',
+                          borderRadius: '4px',
+                        }}
+                        title="Discard this queue entry"
+                      >
+                        <Trash2 size={12} />
+                        <span>Discard</span>
+                      </button>
 
-                    <button
-                      type="button"
-                      onClick={() => onSelectReport(item.clientId)}
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        color: 'var(--primary)',
-                        cursor: 'pointer',
-                        fontWeight: 600,
-                        fontSize: '12px',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                      }}
-                    >
-                      <span>View Report</span>
-                      <ArrowRight size={13} />
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => onSelectReport(item.clientId)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: 'var(--primary)',
+                          cursor: 'pointer',
+                          fontWeight: 600,
+                          fontSize: '12px',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                        }}
+                      >
+                        <span>View Report</span>
+                        <ArrowRight size={13} />
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             );
           })}

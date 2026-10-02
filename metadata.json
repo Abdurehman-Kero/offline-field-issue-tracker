@@ -1,0 +1,6 @@
+{
+  "name": "Offline Field Issue Tracker",
+  "description": "Offline-first infrastructure problem reporter for field workers with background synchronization, PostgreSQL audit history, and coordinator review workflow.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

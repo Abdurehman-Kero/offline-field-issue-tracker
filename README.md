@@ -1,175 +1,180 @@
 # Offline Field Issue Tracker
 
-A robust, local-first web application designed for field workers operating in environments with intermittent, low-bandwidth, or zero network connectivity. Infrastructure problem reports (broken water points, equipment damage, service disruptions, safety hazards) are saved instantly to local browser storage (IndexedDB) and automatically synchronized with a central PostgreSQL backend when connectivity is restored. Coordinators review, assign, update, and resolve reports through an audit-tracked workflow.
+A field reporting tool for infrastructure workers. Create, submit, and manage issue reports — even without internet access. Reports are saved on your device first and automatically sent to the server when you reconnect.
 
 **Project:** WEDER Strategies Operations Platform  
-**Author:** Abdurehman Kero  
+**Author:** Abdurehman Kero
 
 ---
 
-## 1. Directory & Code Structure
+## What it does
 
-The repository is organized into a clean, intuitive structure following this exact layout:
+- **Field workers** report problems they find on site (broken water points, equipment damage, safety hazards, etc.)
+- **Coordinators** review, assign, and resolve those reports
+- **Works offline** — reports are saved locally and sync automatically when internet is restored
+
+---
+
+## Quick Start
+
+### Requirements
+- Node.js 18+
+- PostgreSQL database
+
+### 1. Install dependencies
+
+```bash
+# From the project root
+npm install
+cd server && npm install
+cd ../client && npm install
+```
+
+### 2. Configure the server
+
+Copy the example env file and fill in your database details:
+
+```bash
+cd server
+cp .env.example .env
+```
+
+Open `server/.env` and set:
+```
+DATABASE_URL=postgresql://user:password@localhost:5432/your_db
+PORT=4000
+```
+
+### 3. Start the app
+
+Open two terminals:
+
+**Terminal 1 — Server:**
+```bash
+cd server
+npm run dev
+```
+
+**Terminal 2 — Client:**
+```bash
+cd client
+npm run dev
+```
+
+Then open **http://localhost:3000** in your browser.
+
+---
+
+## How to use
+
+### First time? Click the "Help" button in the top-right of the navbar.
+
+It explains everything from scratch with simple steps.
+
+### Roles
+
+| Role | Can do |
+|------|--------|
+| **Field Worker** | Create and submit reports |
+| **Coordinator** | Review, assign, and update report status |
+
+To switch role, click the **"Role: ..."** button in the top-right of the navbar. It has a ⇄ arrow icon to make it obvious.
+
+### Creating a report
+
+1. Make sure your role is **Field Worker**
+2. Click **"+ New Report"** in the top-right
+3. Fill in the form (location, category, priority, description)
+4. Click **"Submit Report"**
+
+If you're offline, the report saves to your device and syncs later automatically.
+
+### Offline mode
+
+When your internet is disconnected:
+- The top banner turns red and says "Network disconnected"
+- The status pill in the navbar shows **"Offline"**
+- You can still create reports — they are saved on your device
+
+When you reconnect:
+- The app detects it within ~5 seconds
+- All pending reports are automatically uploaded
+- The Outbox badge clears once sync is complete
+
+### The Outbox
+
+The **Outbox** tab shows reports waiting to be sent to the server. The red badge number tells you how many are pending.
+
+You can also click **"Sync Outbox Now"** to force an immediate upload.
+
+---
+
+## Project structure
 
 ```
 offline-field-issue-tracker/
-├── .gitignore
-├── package.json              # root scripts only (dev, build, test, seed, migrate)
-├── README.md                 # System overview and quick-start guide
-├── DEMO_SCRIPT.md            # Complete step-by-step presentation & live demo guide
-├── docs/                     # SRS, design doc, QA checklist, AI usage log
-│   ├── SRS.md
-│   ├── SYSTEM_DESIGN.md
-│   ├── QA_CHECKLIST.md
-│   └── AI_USAGE.md
-├── server/
-│   ├── package.json          # Express server dependencies
-│   ├── .env.example          # Variable names only
-│   ├── src/
-│   │   ├── index.js          # Starts the server
-│   │   ├── app.js            # Express app (used by tests)
-│   │   ├── workflow.js       # Status state machine & transition rules
-│   │   ├── validation.js     # Input boundary rules (Zod)
-│   │   ├── errors.js         # Error helper & centralized handler
-│   │   ├── db/               # PostgreSQL pool, migrate, seed, migrations/001_init.sql
-│   │   ├── routes/           # health.js, reports.js
-│   │   └── services/         # reportService.js, historyService.js
-│   └── tests/                # Server API, validation, and workflow test suites
-└── client/
-    ├── package.json          # React frontend dependencies & build scripts
-    ├── vite.config.js        # Vite configuration & dev proxy
-    ├── index.html            # Frontend HTML template
-    └── src/
-        ├── main.tsx, App.tsx # Application roots
-        ├── api/              # Fetch wrapper & HTTP client
-        ├── db/               # IndexedDB storage functions (localDb.ts)
-        ├── sync/             # Sync engine + retry exponential backoff
-        ├── shared/           # Shared constants, types, and workflow rules
-        ├── hooks/            # useOnlineStatus, useRole, useReports
-        ├── components/       # Header, Badge, ReportCard, HistoryTimeline, Modals
-        ├── pages/            # ReportList, ReportForm, ReportDetails, SyncPage
-        ├── styles/           # variables.css, base.css, layout.css
-        └── tests/            # Client sync and retry test suite
+├── client/                   # React frontend (Vite)
+│   └── src/
+│       ├── components/       # Header, ReportCard, HelpModal, etc.
+│       ├── pages/            # ReportList, ReportForm, ReportDetails, SyncPage
+│       ├── hooks/            # useReports, useOnlineStatus, useRole
+│       ├── db/               # localDb.ts — IndexedDB access
+│       ├── sync/             # syncEngine.ts — background sync logic
+│       └── shared/           # Types, constants, validation
+├── server/                   # Node.js + Express backend
+│   └── src/
+│       ├── routes/           # API routes (reports, status changes)
+│       ├── services/         # Business logic
+│       ├── db/               # PostgreSQL pool + migrations
+│       └── validation.js     # Zod schemas for incoming data
+├── docs/                     # SRS, system design, QA checklist
+└── README.md
 ```
 
 ---
 
-## 2. Tech Stack
+## Architecture overview
 
-| Layer | Technology | Rationale |
-|---|---|---|
-| **Client Frontend** | React 19, Vite, TypeScript | Fast component rendering, type-safe development |
-| **Local Storage** | IndexedDB via `idb` | Reliable in-browser database surviving refreshes and reboots |
-| **Styling** | Plain CSS with Design Variables | Flat, calm, accessible internal tool design; fast and responsive |
-| **Backend API** | Node.js 20+, Express | Fast, modular HTTP REST API |
-| **Database** | PostgreSQL 15+ / Embedded PGlite | Raw SQL transactions, `ON CONFLICT` idempotency, and embedded fallback |
-| **Validation** | Zod | Strictly typed boundary validation on both server and client |
-| **Security** | Helmet, CORS, parameterized queries | Protection against standard web vulnerabilities and SQL injection |
-| **Testing** | Vitest + Supertest | 32 automated unit and integration tests across client and server |
+```
+Browser (client)
+├── IndexedDB (local storage — always available)
+├── Sync Engine — runs every 15s, skips when offline
+└── Connectivity Probe — pings Google every 5s to detect true online state
+
+Server (Node.js + Express)
+└── PostgreSQL — source of truth for all synced reports
+```
+
+**Key principle:** The client is "local-first". All writes go to IndexedDB immediately, then sync to the server in the background. This ensures the app always works, even with no network.
 
 ---
 
-## 3. Quick Start & Setup Instructions
+## Available npm scripts
 
-### Prerequisites
-- Node.js 20+ (LTS)
-- npm 9+
-- PostgreSQL 15+ (optional; the server includes a self-contained in-memory PGlite engine if an external PostgreSQL instance is not configured)
+From the root:
 
-### Installation
-Clone the repository and install all dependencies:
-```bash
-git clone https://github.com/nexussphere0974/offline-field-issue-tracker.git
-cd offline-field-issue-tracker
-npm install
-```
+| Command | What it does |
+|---------|-------------|
+| `npm run dev` | Start both client and server together |
+| `npm run build` | Build the client for production |
 
-### Environment Configuration
-Copy the environment example file:
-```bash
-cp .env.example .env
-```
-Default settings:
-```env
-PORT=3000
-# Optional: Set your PostgreSQL connection string if running external Postgres
-# DATABASE_URL=postgresql://postgres:password@localhost:5432/field_tracker
-```
-*(If `DATABASE_URL` is omitted, the application automatically uses the embedded PostgreSQL WASM engine, allowing immediate out-of-the-box execution without any external database setup).*
+From `server/`:
 
-### Running the Application
-Start the full-stack development server:
-```bash
-npm run dev
-```
-Open **[http://localhost:3000](http://localhost:3000)** in your browser.
+| Command | What it does |
+|---------|-------------|
+| `npm run dev` | Start the API server with hot reload |
+| `npm run migrate` | Run database migrations |
+| `npm run seed` | Seed the database with sample data |
 
 ---
 
-## 4. Database Migration & Seeding
+## Common issues
 
-Run the schema migrations manually:
-```bash
-npm run migrate
-```
+**Reports not showing after refresh while offline?**  
+The app loads data from IndexedDB — it should appear within 1–2 seconds. If not, check that IndexedDB is not blocked in your browser settings.
 
-Seed 12 realistic demo infrastructure reports covering every category, priority, status, and audit history:
-```bash
-npm run seed
-```
+**Outbox stuck at "0 Pending" but report not on server?**  
+Reconnect your internet and wait 5 seconds. The app will auto-sync. You can also click "Sync Outbox Now" in the Outbox tab.
 
----
-
-## 5. Running Automated Tests
-
-The test suite covers workflow transition permissions, Zod validation constraints, idempotent report insertion, version conflict resolution (HTTP 409), and client retry backoff calculations.
-
-Run all tests:
-```bash
-npm test
-```
-*(Executes 32 test cases across 4 test suites)*.
-
----
-
-## 6. Architecture & Synchronization Strategy
-
-### The Local-First Principle
-Field workers never experience loading spinners or network timeouts when creating or saving problem reports. All user actions immediately write to **IndexedDB**. A dedicated background **Sync Engine** reconciles the local state with the server.
-
-```
-[ Field Worker UI (React 19) ]
-             ▲
-             │ (Immediate Read/Write)
-             ▼
-    [ IndexedDB Layer ]
-    • reports store (keyed by clientId)
-    • history store
-             ▲
-             │ (Background Sync Engine: retry, backoff, lock)
-             ▼
-      [ HTTP / JSON API ]  (Header: X-Role: field_worker | coordinator)
-             ▲
-             │ (Express + Helmet + CORS + Zod Validation)
-             ▼
-   [ PostgreSQL Database ]
-   • reports table (UNIQUE client_id constraint)
-   • report_history table (append-only audit log)
-```
-
-### Outbox Lifecycle
-1. `local_only`: Saved on device as a Draft. Never sent to the server until the worker submits.
-2. `pending`: Marked as Submitted by worker; queued in the device outbox.
-3. `syncing`: Acquired by the active sync loop; currently uploading.
-4. `synced`: Server acknowledged receipt with HTTP 201 or 200; local state updated with `serverId` and server `version`.
-5. `failed`: Exceeded maximum retry attempts (5 attempts) or received HTTP 400 validation rejection; requires user review and manual retry.
-
-### Preventing Duplicate Submissions (Idempotency)
-Each report is generated with a client UUID (`crypto.randomUUID()`). The backend enforces a `UNIQUE` constraint on `client_id` with `INSERT ... ON CONFLICT (client_id) DO NOTHING`. If a retry occurs under unstable network conditions, the existing record is returned safely with `HTTP 200 OK`.
-
-### Concurrency & Conflict Handling (Optimistic Locking)
-Coordinator updates send the record `version` counter:
-```sql
-UPDATE reports SET status = $1, version = version + 1 WHERE id = $2 AND version = $3 RETURNING *;
-```
-If two coordinators act on the same report simultaneously, the second receives `409 VERSION_CONFLICT` and the UI automatically reloads the freshest data.
+**Role button doesn't change anything?**  
+Some actions (like creating reports) are only for Field Workers. Some (like changing status) are only for Coordinators. Make sure you're on the right role for what you're trying to do.

@@ -87,21 +87,43 @@ export async function processOutbox(
           }
           processed++;
         } else if (item.type === 'STATUS_CHANGE') {
-          const reportId = item.payload.reportId;
+          let reportId = item.payload.reportId;
           const targetStatus = item.payload.toStatus || item.payload.status;
 
-          // Fetch current version if not present
-          let version = item.payload.version;
-          if (!version) {
-            try {
-              const current = await apiClient.get(`/api/reports/${reportId}`, {
-                headers: { 'X-Role': 'coordinator' },
-              });
-              version = current.version || 1;
-            } catch {
-              version = 1;
+          // Resolve the actual server ID — if the stored UUID is unknown on the server,
+          // fall back to looking up by clientId (the server supports both).
+          let serverReport: Record<string, any> | null = null;
+          try {
+            serverReport = await apiClient.get(`/api/reports/${reportId}`, {
+              headers: { 'X-Role': 'coordinator' },
+            });
+          } catch (lookupErr: any) {
+            // If 404, try lookup by clientId
+            if (lookupErr?.status === 404) {
+              try {
+                serverReport = await apiClient.get(`/api/reports/${item.clientId}`, {
+                  headers: { 'X-Role': 'coordinator' },
+                });
+                if (serverReport?.id) {
+                  reportId = serverReport.id;
+                  // Persist corrected server id to local record
+                  const locals = await getAllLocalReports();
+                  const local = locals.find((r) => r.clientId === item.clientId);
+                  if (local) {
+                    await saveLocalReport({ ...local, id: serverReport.id, serverVersion: serverReport.version || 1 });
+                  }
+                }
+              } catch {
+                // If clientId lookup also 404s, the report truly doesn't exist on server yet.
+                // Re-throw so the item stays pending and will retry.
+                throw new Error(`Report not yet synced to server. It will retry automatically.`);
+              }
+            } else {
+              throw lookupErr;
             }
           }
+
+          const version = serverReport?.version || item.payload.version || 1;
 
           const statusPayload: Record<string, any> = {
             toStatus: targetStatus,
@@ -120,8 +142,9 @@ export async function processOutbox(
           if (local) {
             await saveLocalReport({
               ...local,
+              id: res.id || reportId,
               status: res.status,
-              serverVersion: res.version || version + 1,
+              serverVersion: res.version || Number(version) + 1,
               assignedTo: res.assignedTo || local.assignedTo,
               syncState: 'synced',
               syncedAt: new Date().toISOString(),

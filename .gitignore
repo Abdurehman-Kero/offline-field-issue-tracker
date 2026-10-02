@@ -8,3 +8,9 @@ coverage/
 !.env.example
 .data/
 bun.lock
+
+# Temporary and unnecessary files
+server/cleanup.js
+docs/AGENT_PROMPT*.md
+*scratch*.md
+.tempmediaStorage/
